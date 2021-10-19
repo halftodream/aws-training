@@ -1,0 +1,50 @@
+Description: Create an EC2 instance by AWS CloudFormation
+Parameters:
+    InstanceType:
+      Type: String
+      Default: t2.micro
+      AllowedValues:
+        - t2.micro
+        - m1.small
+        - m1.large
+      Description: Enter t2.micro, m1.small, or m1.large. Default is t2.micro.
+Resources:
+  SecurityGroupHomeTaskTraffic:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: server_task_0
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+        Description: For traffic from Internet
+      GroupDescription: Security Group for demo server
+      VpcId: vpc-010e9f192a9bb2655
+  EC2InstanceHomeTask:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone: us-west-2a
+      BlockDeviceMappings:
+      - DeviceName: /dev/sda1
+        Ebs:
+          DeleteOnTermination: 'true'
+          VolumeSize: '8'
+          VolumeType: gp2
+      ImageId:  ami-013a129d325529d4d
+      InstanceType:
+        Ref: InstanceType
+      KeyName: aws-tasks
+      NetworkInterfaces:
+      - Description: Primary network interface
+        DeviceIndex: 0
+        SubnetId: subnet-05e9e18f3a63b64d4
+        PrivateIpAddress: 172.31.16.4
+        GroupSet:
+        - Ref: SecurityGroupHomeTaskTraffic
+Outputs:
+  PublicIp:
+    Description: Server Public IP
+    Value: !GetAtt EC2InstanceHomeTask.PublicIp
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicIp"
