@@ -1,0 +1,44 @@
+Description: Create an EC2 instance by AWS CloudFormation
+Parameters:
+    InstanceType:
+      Type: String
+      Default: t2.micro
+      AllowedValues:
+        - t2.micro
+        - m1.small
+        - m1.large
+      Description: Enter t2.micro, m1.small, or m1.large. Default is t2.micro.
+    KeyName:
+      Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+      Type: AWS::EC2::KeyPair::KeyName
+      ConstraintDescription: must be the name of an existing EC2 KeyPair.
+Resources:
+  SecurityGroupHomeTaskTraffic:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: server_task_0
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+        Description: For traffic from Internet
+      GroupDescription: Security Group for demo server
+      VpcId: vpc-010e9f192a9bb2655
+  EC2InstanceHomeTask:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone: us-west-2b
+      ImageId: ami-013a129d325529d4d
+      InstanceType:
+        Ref: InstanceType
+      KeyName:
+        Ref: KeyName
+      SecurityGroupIds:
+        - Ref: SecurityGroupHomeTaskTraffic
+Outputs:
+  PublicIp:
+    Description: Server Public IP
+    Value: !GetAtt EC2InstanceHomeTask.PublicIp
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicIp"
