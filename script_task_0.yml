@@ -8,6 +8,10 @@ Parameters:
         - m1.small
         - m1.large
       Description: Enter t2.micro, m1.small, or m1.large. Default is t2.micro.
+    KeyName:
+    Type: String
+    Default: aws-tasks
+    Description: key pare value 
 Resources:
   SecurityGroupHomeTaskTraffic:
     Type: AWS::EC2::SecurityGroup
@@ -24,23 +28,24 @@ Resources:
   EC2InstanceHomeTask:
     Type: AWS::EC2::Instance
     Properties:
-      AvailabilityZone: us-west-2a
+      AvailabilityZone: us-west-2b
       BlockDeviceMappings:
       - DeviceName: /dev/sda1
         Ebs:
           DeleteOnTermination: 'true'
           VolumeSize: '8'
           VolumeType: gp2
-      ImageId:  ami-013a129d325529d4d
+      ImageId: ami-013a129d325529d4d
       InstanceType:
         Ref: InstanceType
-      KeyName: aws-tasks
+      KeyName:
+        Ref: KeyName
       NetworkInterfaces:
       - Description: Primary network interface
         DeviceIndex: 0
-        SubnetId: subnet-05e9e18f3a63b64d4
-        PrivateIpAddress: 172.31.16.4
-        GroupSet:
+        SubnetId: subnet-011b21a8898034b7c
+        PrivateIpAddress: 172.31.32.4
+      SecurityGroupIds:
         - Ref: SecurityGroupHomeTaskTraffic
 Outputs:
   PublicIp:
