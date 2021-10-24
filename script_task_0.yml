@@ -1,5 +1,24 @@
+AWSTemplateFormatVersion: '2010-09-09'
 Description: Create an EC2 instance by AWS CloudFormation
 Parameters:
+    ImageId:
+      Type: String
+      Default: ami-013a129d325529d4d
+    AvailabilityZone:
+      Type: String
+      Default: us-west-2b
+    VpcId:
+      Type: String
+      Default: vpc-010e9f192a9bb2655
+    Capacity:
+      Type: String
+      Default: 2
+    PauseTime:
+      Type: String
+      Default: PT1M
+    SubnetId:
+      Type: String
+      Default: subnet-011b21a8898034b7c
     InstanceType:
       Type: String
       Default: t2.micro
@@ -12,33 +31,122 @@ Parameters:
       Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
       Type: AWS::EC2::KeyPair::KeyName
       ConstraintDescription: must be the name of an existing EC2 KeyPair.
+
 Resources:
-  SecurityGroupHomeTaskTraffic:
+  ControlPortAddress:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  AssociateControlPort:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt ControlPortAddress.AllocationId
+      NetworkInterfaceId: !Ref controlXface
+  WebPortAddress:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  AssociateWebPort:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt WebPortAddress.AllocationId
+      NetworkInterfaceId: !Ref webXface
+  SSHSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: server_task_0
+      VpcId: !Ref VpcId
+      GroupDescription: Enable SSH access via port 22
       SecurityGroupIngress:
-      - IpProtocol: tcp
+      - CidrIp: 0.0.0.0/0
         FromPort: 22
+        IpProtocol: tcp
         ToPort: 22
-        CidrIp: 0.0.0.0/0
-        Description: For traffic from Internet
-      GroupDescription: Security Group for demo server
-      VpcId: vpc-010e9f192a9bb2655
-  EC2InstanceHomeTask:
-    Type: AWS::EC2::Instance
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
     Properties:
-      AvailabilityZone: us-west-2b
-      ImageId: ami-013a129d325529d4d
+      VpcId: !Ref VpcId
+      GroupDescription: Enable HTTP access via user defined port
+      SecurityGroupIngress:
+      - CidrIp: 0.0.0.0/0
+        FromPort: 80
+        IpProtocol: tcp
+        ToPort: 80
+  controlXface:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      SubnetId: !Ref SubnetId
+      Description: Interface for controlling traffic such as SSH
+      GroupSet: 
+      - !Ref SSHSecurityGroup
+      SourceDestCheck: true
+      Tags:
+        -
+          Key: Network
+          Value: Control
+  webXface:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      SubnetId: !Ref SubnetId
+      Description: Interface for controlling traffic such as SSH
+      GroupSet: 
+      - !Ref WebSecurityGroup
+      SourceDestCheck: true
+      Tags:
+        -
+          Key: Network
+          Value: Web
+          
+  LaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: !Ref PauseTime
+    Properties:
+      #AvailabilityZone: !Ref AvailabilityZone
+      ImageId: !Ref ImageId
       InstanceType:
         Ref: InstanceType
       KeyName:
         Ref: KeyName
-      SecurityGroupIds:
-        - Ref: SecurityGroupHomeTaskTraffic
+      # NetworkInterfaces:
+      #   -
+      #     NetworkInterfaceId: !Ref controlXface
+      #     DeviceIndex: 0
+      #   -
+      #     NetworkInterfaceId: !Ref webXface
+      #     DeviceIndex: 1
+      SecurityGroups: 
+        - !Ref WebSecurityGroup
+        - !Ref SSHSecurityGroup
+    
+      UserData:
+          'Fn::Base64': !Sub |
+            #!/bin/bash -ex
+            trap '/opt/aws/bin/cfn-signal --exit-code 1 --resource VirtualMachine --region ${AWS::Region} --stack ${AWS::StackName}' ERR
+            # run some commands
+            sudo amazon-linux-extras enable corretto8 & sudo yum clean metadata & sudo yum install -y java-1.8.0-amazon-corretto
+            /opt/aws/bin/cfn-signal --exit-code 0 --resource VirtualMachine --region ${AWS::Region} --stack ${AWS::StackName}
+            # run service 
+            yum install ec2-net-utils -y
+            ec2ifup eth1
+            service httpd start
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier: 
+        - !Ref SubnetId
+      LaunchConfigurationName: !Ref LaunchConfiguration
+      MinSize: !Ref Capacity
+      MaxSize: !Ref Capacity
+      DesiredCapacity: !Ref Capacity
+      HealthCheckGracePeriod: 300
+      MaxInstanceLifetime: 2592000
+
+
 Outputs:
   PublicIp:
     Description: Server Public IP
-    Value: !GetAtt EC2InstanceHomeTask.PublicIp
+    Value: !Ref webXface
     Export:
       Name: !Sub "${AWS::StackName}-PublicIp"
