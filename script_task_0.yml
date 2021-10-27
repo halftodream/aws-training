@@ -1,6 +1,9 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Create an EC2 instance by AWS CloudFormation
 Parameters:
+    LaunchTemplateVersionNumber:
+      Type: String
+      Default: alfa
     ImageId:
       Type: String
       Default: ami-013a129d325529d4d
@@ -33,24 +36,6 @@ Parameters:
       ConstraintDescription: must be the name of an existing EC2 KeyPair.
 
 Resources:
-  ControlPortAddress:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-  AssociateControlPort:
-    Type: AWS::EC2::EIPAssociation
-    Properties:
-      AllocationId: !GetAtt ControlPortAddress.AllocationId
-      NetworkInterfaceId: !Ref controlXface
-  WebPortAddress:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-  AssociateWebPort:
-    Type: AWS::EC2::EIPAssociation
-    Properties:
-      AllocationId: !GetAtt WebPortAddress.AllocationId
-      NetworkInterfaceId: !Ref webXface
   SSHSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -71,55 +56,28 @@ Resources:
         FromPort: 80
         IpProtocol: tcp
         ToPort: 80
-  controlXface:
-    Type: AWS::EC2::NetworkInterface
+
+  LaunchTemplate:
+    Type: 'AWS::EC2::LaunchTemplate'
     Properties:
-      SubnetId: !Ref SubnetId
-      Description: Interface for controlling traffic such as SSH
-      GroupSet: 
-      - !Ref SSHSecurityGroup
-      SourceDestCheck: true
-      Tags:
-        -
-          Key: Network
-          Value: Control
-  webXface:
-    Type: AWS::EC2::NetworkInterface
-    Properties:
-      SubnetId: !Ref SubnetId
-      Description: Interface for controlling traffic such as SSH
-      GroupSet: 
-      - !Ref WebSecurityGroup
-      SourceDestCheck: true
-      Tags:
-        -
-          Key: Network
-          Value: Web
-          
-  LaunchConfiguration:
-    Type: AWS::AutoScaling::LaunchConfiguration
-    CreationPolicy:
-      ResourceSignal:
-        Timeout: !Ref PauseTime
-    Properties:
-      #AvailabilityZone: !Ref AvailabilityZone
-      ImageId: !Ref ImageId
-      InstanceType:
-        Ref: InstanceType
-      KeyName:
-        Ref: KeyName
-      # NetworkInterfaces:
-      #   -
-      #     NetworkInterfaceId: !Ref controlXface
-      #     DeviceIndex: 0
-      #   -
-      #     NetworkInterfaceId: !Ref webXface
-      #     DeviceIndex: 1
-      SecurityGroups: 
-        - !Ref WebSecurityGroup
-        - !Ref SSHSecurityGroup
-    
-      UserData:
+      LaunchTemplateName: !Sub '${AWS::StackName}-launch-template-for-auto-scaling'
+      LaunchTemplateData:
+        NetworkInterfaces:
+          - DeviceIndex: 0
+            AssociatePublicIpAddress: true
+            Groups:
+              - !Ref WebSecurityGroup
+              - !Ref SSHSecurityGroup
+            DeleteOnTermination: true
+        Placement:
+          Tenancy: dedicated
+        ImageId: 
+          !Ref ImageId
+        InstanceType: 
+          !Ref InstanceType
+        KeyName: 
+          !Ref KeyName
+        UserData:
           'Fn::Base64': !Sub |
             #!/bin/bash -ex
             trap '/opt/aws/bin/cfn-signal --exit-code 1 --resource VirtualMachine --region ${AWS::Region} --stack ${AWS::StackName}' ERR
@@ -136,7 +94,9 @@ Resources:
     Properties:
       VPCZoneIdentifier: 
         - !Ref SubnetId
-      LaunchConfigurationName: !Ref LaunchConfiguration
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !Ref LaunchTemplateVersionNumber
       MinSize: !Ref Capacity
       MaxSize: !Ref Capacity
       DesiredCapacity: !Ref Capacity
@@ -147,6 +107,6 @@ Resources:
 Outputs:
   PublicIp:
     Description: Server Public IP
-    Value: !Ref webXface
+    Value: !Ref SSHSecurityGroup
     Export:
       Name: !Sub "${AWS::StackName}-PublicIp"
