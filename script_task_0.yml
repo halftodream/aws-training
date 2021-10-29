@@ -1,9 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Create an EC2 instance by AWS CloudFormation
 Parameters:
-    LaunchTemplateVersionNumber:
-      Type: String
-      Default: alfa
     ImageId:
       Type: String
       Default: ami-013a129d325529d4d
@@ -60,7 +57,7 @@ Resources:
   LaunchTemplate:
     Type: 'AWS::EC2::LaunchTemplate'
     Properties:
-      LaunchTemplateName: !Sub '${AWS::StackName}-launch-template-for-auto-scaling'
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template #!Sub '${AWS::StackName}-launch-template-for-auto-scaling'
       LaunchTemplateData:
         NetworkInterfaces:
           - DeviceIndex: 0
@@ -96,13 +93,12 @@ Resources:
         - !Ref SubnetId
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !Ref LaunchTemplateVersionNumber
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
       MinSize: !Ref Capacity
       MaxSize: !Ref Capacity
       DesiredCapacity: !Ref Capacity
       HealthCheckGracePeriod: 300
       MaxInstanceLifetime: 2592000
-
 
 Outputs:
   PublicIp:
